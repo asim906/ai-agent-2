@@ -1,0 +1,171 @@
+You are a senior full-stack AI engineer and automation expert.
+
+Your task is to build a complete SaaS web application for a WhatsApp Automation AI Agent with the following architecture and features:
+
+========================
+🔐 AUTHENTICATION SYSTEM
+========================
+- Use Firebase Authentication
+- Enable Email/Password login & signup
+- User must login before accessing dashboard
+- Secure session handling
+- Logout functionality
+
+========================
+👋 ONBOARDING FLOW
+========================
+After login:
+- Show a clean onboarding screen explaining features:
+  - WhatsApp Automation
+  - AI Agent Integration
+  - Memory System
+  - Data Extraction Tools
+- Include a "Connect to WhatsApp" button
+
+========================
+📲 WHATSAPP CONNECTION
+========================
+IMPORTANT:
+- DO NOT use official WhatsApp Business API
+- Use alternative methods (like WhatsApp Web automation / unofficial APIs such as Baileys or similar libraries)
+
+Features:
+- QR Code scanning to connect WhatsApp
+- Persistent session (auto reconnect)
+- Show connection status (Connected / Disconnected)
+
+========================
+🖥️ DASHBOARD UI
+========================
+Build a modern SaaS dashboard with:
+
+1. Overview Panel:
+   - Total messages sent
+   - Total messages received
+   - Active chats count
+   - Connection status
+
+2. Live Chat Panel:
+   - Show all WhatsApp chats
+   - Real-time message sync
+   - Ability to reply from dashboard
+
+========================
+🤖 AI MODEL INTEGRATION
+========================
+Allow user to integrate AI models:
+
+Supported Providers:
+- OpenAI
+- OpenRouter
+- Gemini
+
+Features:
+- User can input API keys
+- Select active model
+- Temperature / response settings
+
+========================
+🧠 MEMORY SYSTEM (VERY IMPORTANT)
+========================
+
+1. Chat Memory:
+- Store all user conversations
+- Use for context-aware replies
+
+2. Custom Memory (Training):
+- User can define custom knowledge
+- Example:
+  Q: What is your name?
+  A: My name is Aseem
+
+- AI agent must always use this memory while responding
+
+========================
+🛠️ TOOLS SYSTEM
+========================
+
+Implement tools the AI can use:
+
+1. Excel/CSV Tool:
+- Upload Excel or CSV file
+- Extract data from file
+- AI can query this data
+
+2. Custom Knowledge Tool:
+- User can store structured data
+- AI can reference it in answers
+
+========================
+⚙️ AUTOMATION LOGIC
+========================
+
+- Incoming WhatsApp messages trigger AI response
+- AI uses:
+  - Chat history
+  - Custom memory
+  - Tools (if needed)
+
+- Fully automated replies
+
+========================
+📊 ANALYTICS
+========================
+
+Dashboard should show:
+- Total messages
+- Daily activity
+- Response success rate
+
+========================
+🎨 UI/UX REQUIREMENTS
+========================
+
+- Clean modern SaaS design
+- Responsive (mobile + desktop)
+- Sidebar navigation
+- Sections:
+  - Dashboard
+  - Chats
+  - AI Settings
+  - Memory
+  - Tools
+  - Analytics
+
+========================
+⚡ TECH STACK
+========================
+
+Frontend:
+- React / Next.js
+
+Backend:
+- Firebase (Auth + Firestore + Functions)
+
+WhatsApp:
+- Baileys or similar unofficial API
+
+AI:
+- API-based (OpenAI / OpenRouter / Gemini)
+
+========================
+🔒 SECURITY
+========================
+
+- Secure API key storage
+- Firestore rules
+- Auth protection
+
+========================
+🎯 FINAL GOAL
+========================
+
+Build a fully working SaaS AI WhatsApp automation platform where:
+- User logs in
+- Connects WhatsApp
+- Integrates AI
+- Trains agent using memory
+- Automates replies
+- Monitors everything from dashboard
+
+Make the system modular, scalable, and production-ready.
