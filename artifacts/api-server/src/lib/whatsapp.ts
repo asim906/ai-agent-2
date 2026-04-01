@@ -19,6 +19,20 @@ interface SessionState {
   starting: boolean;
 }
 
+const baileysLogger = {
+  level: "warn",
+  trace: (_obj: unknown, _msg?: string) => {},
+  debug: (_obj: unknown, _msg?: string) => {},
+  info: (_obj: unknown, _msg?: string) => {},
+  warn: (obj: unknown, msg?: string) =>
+    logger.warn({ baileys: obj }, msg ?? "baileys warn"),
+  error: (obj: unknown, msg?: string) =>
+    logger.error({ baileys: obj }, msg ?? "baileys error"),
+  fatal: (obj: unknown, msg?: string) =>
+    logger.error({ baileys: obj }, msg ?? "baileys fatal"),
+  child: (_opts: unknown) => baileysLogger,
+} as never;
+
 class WhatsappService {
   private sessions = new Map<string, SessionState>();
 
@@ -46,15 +60,21 @@ class WhatsappService {
     }
 
     const existing = session.qr;
-    if (existing.qr && existing.expiresAt && new Date(existing.expiresAt) > new Date()) {
+    if (
+      existing.qr &&
+      existing.expiresAt &&
+      new Date(existing.expiresAt) > new Date()
+    ) {
       return existing;
     }
 
     if (!session.socket && !session.starting) {
-      await this.startSession(userId);
+      this.startSession(userId).catch((err) =>
+        logger.error({ err, userId }, "startSession threw")
+      );
     }
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       const s = this.getSession(userId);
       if (s.qr.qr) return s.qr;
@@ -74,36 +94,25 @@ class WhatsappService {
         default: makeWASocket,
         useMultiFileAuthState,
         DisconnectReason,
+        fetchLatestBaileysVersion,
       } = await import("@whiskeysockets/baileys");
+
+      const { version } = await fetchLatestBaileysVersion();
+      logger.info({ version, userId }, "Using WhatsApp Web version");
 
       const authDir = path.join(os.tmpdir(), "wa-auth", userId);
       const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
       const sock = makeWASocket({
+        version,
         auth: state,
         printQRInTerminal: false,
-        logger: {
-          level: "silent",
-          trace: () => {},
-          debug: () => {},
-          info: () => {},
-          warn: (obj: unknown, msg?: string) => logger.warn({ baileys: obj }, msg),
-          error: (obj: unknown, msg?: string) => logger.error({ baileys: obj }, msg),
-          fatal: (obj: unknown, msg?: string) => logger.error({ baileys: obj }, msg),
-          child: () => ({
-            level: "silent",
-            trace: () => {},
-            debug: () => {},
-            info: () => {},
-            warn: () => {},
-            error: () => {},
-            fatal: () => {},
-            child: () => ({}) as never,
-          }),
-        } as never,
-        browser: ["Nexus Ops", "Chrome", "1.0.0"],
+        logger: baileysLogger,
         connectTimeoutMs: 60_000,
-        retryRequestDelayMs: 250,
+        keepAliveIntervalMs: 10_000,
+        retryRequestDelayMs: 500,
+        markOnlineOnConnect: false,
+        syncFullHistory: false,
       });
 
       const s = this.getSession(userId);
@@ -142,8 +151,11 @@ class WhatsappService {
 
           if (connection === "close") {
             const current = this.getSession(userId);
-            const err = lastDisconnect?.error as { output?: { statusCode?: number } } | undefined;
+            const err = lastDisconnect?.error as
+              | { output?: { statusCode?: number }; message?: string }
+              | undefined;
             const code = err?.output?.statusCode;
+            const message = err?.message ?? "unknown";
 
             current.socket = null;
             current.starting = false;
@@ -154,9 +166,9 @@ class WhatsappService {
               logger.info({ userId }, "WhatsApp logged out");
             } else {
               current.status = { connected: false, phoneNumber: null };
-              logger.info(
-                { userId, code },
-                "WhatsApp disconnected — will reconnect on next QR request"
+              logger.warn(
+                { userId, code, message },
+                "WhatsApp connection closed — will reconnect on next QR request"
               );
             }
           }
