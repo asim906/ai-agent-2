@@ -1,34 +1,29 @@
 import { useAuth } from "@workspace/auth-firebase-web";
 import { useLocation, Link } from "wouter";
-import { useEffect, useState } from "react";
-import { BrainCircuit, Mail, Lock, LogIn, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { BrainCircuit, Mail, Lock, UserPlus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
-export default function Login() {
-  const { login, isAuthenticated } = useAuth();
+export default function SignUp() {
+  const { signup } = useAuth();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      setLocation("/dashboard");
-    }
-  }, [isAuthenticated, setLocation]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
-      toast.success("Welcome back!");
+      await signup(email, password);
+      toast.success("Account created successfully!");
+      setLocation("/onboarding");
     } catch (error: any) {
-      toast.error(error.message || "Failed to log in");
+      toast.error(error.message || "Failed to create account");
     } finally {
       setLoading(false);
     }
@@ -47,9 +42,9 @@ export default function Login() {
                 <BrainCircuit className="w-8 h-8 text-primary" />
               </div>
             </div>
-            <CardTitle className="text-3xl font-bold tracking-tight">Nexus Ops Login</CardTitle>
+            <CardTitle className="text-3xl font-bold tracking-tight">Create Account</CardTitle>
             <CardDescription className="text-muted-foreground">
-              Intelligent WhatsApp automation command center
+              Join Nexus Ops and start automating your WhatsApp
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -85,16 +80,16 @@ export default function Login() {
                 </div>
               </div>
               <Button type="submit" className="w-full h-11 text-base font-medium mt-2" disabled={loading}>
-                {loading ? "Authenticating..." : "Sign In"}
-                {!loading && <LogIn className="ml-2 w-4 h-4" />}
+                {loading ? "Creating account..." : "Sign Up"}
+                {!loading && <ArrowRight className="ml-2 w-4 h-4" />}
               </Button>
             </form>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">
             <div className="text-sm text-center text-muted-foreground">
-              Don't have an account?{" "}
-              <Link href="/signup" className="text-primary font-medium hover:underline">
-                Create Account
+              Already have an account?{" "}
+              <Link href="/login" className="text-primary font-medium hover:underline">
+                Log In
               </Link>
             </div>
           </CardFooter>

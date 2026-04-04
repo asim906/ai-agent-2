@@ -21,12 +21,14 @@ import { format } from "date-fns";
 
 export default function Memory() {
   const { data: memorySummary } = useGetMemoryChats();
-  const { data: customMemories } = useListCustomMemory();
+  const { data: customMemories, error: customMemoriesError } = useListCustomMemory();
   const createMemory = useCreateCustomMemory();
   const deleteMemory = useDeleteCustomMemory();
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const memories = Array.isArray(customMemories) ? customMemories : [];
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ question: "", answer: "", category: "" });
@@ -121,43 +123,49 @@ export default function Memory() {
           </div>
 
           <Card className="bg-card border-border overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="w-[30%] text-foreground">Query Vector</TableHead>
-                  <TableHead className="w-[40%] text-foreground">Response Vector</TableHead>
-                  <TableHead className="text-foreground">Category</TableHead>
-                  <TableHead className="text-foreground">Created</TableHead>
-                  <TableHead className="text-right text-foreground">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customMemories?.length === 0 ? (
-                  <TableRow className="border-border">
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                      <Database className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                      No custom memory records found.
-                    </TableCell>
+            {customMemoriesError ? (
+              <div className="p-6 text-center text-destructive">
+                Failed to load custom memories: {customMemoriesError.message}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-[30%] text-foreground">Query Vector</TableHead>
+                    <TableHead className="w-[40%] text-foreground">Response Vector</TableHead>
+                    <TableHead className="text-foreground">Category</TableHead>
+                    <TableHead className="text-foreground">Created</TableHead>
+                    <TableHead className="text-right text-foreground">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  customMemories?.map((mem) => (
-                    <TableRow key={mem.id} className="border-border hover:bg-muted/50">
-                      <TableCell className="font-medium">{mem.question}</TableCell>
-                      <TableCell className="text-muted-foreground truncate max-w-xs">{mem.answer}</TableCell>
-                      <TableCell>
-                        {mem.category && <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">{mem.category}</span>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{format(new Date(mem.createdAt), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(mem.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${mem.id}`}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {memories.length === 0 ? (
+                    <TableRow className="border-border">
+                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                        <Database className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                        No custom memory records found.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    memories.map((mem) => (
+                      <TableRow key={mem.id} className="border-border hover:bg-muted/50">
+                        <TableCell className="font-medium">{mem.question}</TableCell>
+                        <TableCell className="text-muted-foreground truncate max-w-xs">{mem.answer}</TableCell>
+                        <TableCell>
+                          {mem.category && <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs">{mem.category}</span>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{format(new Date(mem.createdAt), 'MMM d, yyyy')}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(mem.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" data-testid={`button-delete-${mem.id}`}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </Card>
         </TabsContent>
 

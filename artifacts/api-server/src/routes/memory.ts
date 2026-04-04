@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { customMemoryTable, messagesTable } from "@workspace/db/schema";
 import {
   GetMemoryChatsResponse,
   ListCustomMemoryResponse,
@@ -11,9 +10,11 @@ import {
   DeleteCustomMemoryParams,
   DeleteCustomMemoryResponse,
 } from "@workspace/api-zod";
-import { eq, and, count } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 const router = Router();
+const MEMORY_COLLECTION = "custom_memory";
+const MESSAGES_COLLECTION = "messages";
 
 router.get("/memory/chats", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -22,15 +23,17 @@ router.get("/memory/chats", async (req, res) => {
   }
 
   try {
-    const [{ value: totalMessages }] = await db
-      .select({ value: count() })
-      .from(messagesTable)
-      .where(eq(messagesTable.userId, req.user.id));
+    const countSnapshot = await db.collection(MESSAGES_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .count()
+      .get();
+    
+    const totalMessages = countSnapshot.data().count;
 
     const result = GetMemoryChatsResponse.parse({
       totalConversations: 0,
-      totalMessages: totalMessages ?? 0,
-      storageUsed: `${Math.round((totalMessages ?? 0) * 0.2)}KB`,
+      totalMessages: totalMessages,
+      storageUsed: `${Math.round(totalMessages * 0.2)}KB`,
     });
     res.json(result);
   } catch (err) {
@@ -46,18 +49,25 @@ router.get("/memory/custom", async (req, res) => {
   }
 
   try {
-    const memories = await db.query.customMemoryTable.findMany({
-      where: eq(customMemoryTable.userId, req.user.id),
-      orderBy: (t, { desc }) => [desc(t.createdAt)],
-    });
+    const snapshot = await db.collection(MEMORY_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .get();
+
+    const memories = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() as any }))
+      .sort((a, b) => {
+        const timeA = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
+        const timeB = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
+        return timeB - timeA; // Descending
+      });
 
     const result = ListCustomMemoryResponse.parse(
-      memories.map((m) => ({
-        id: String(m.id),
+      memories.map((m: any) => ({
+        id: m.id,
         question: m.question,
         answer: m.answer,
         category: m.category || null,
-        createdAt: m.createdAt.toISOString(),
+        createdAt: m.createdAt?.toDate?.()?.toISOString() || m.createdAt || new Date().toISOString(),
       }))
     );
     res.json(result);
@@ -80,22 +90,25 @@ router.post("/memory/custom", async (req, res) => {
   }
 
   try {
-    const [created] = await db
-      .insert(customMemoryTable)
-      .values({
-        userId: req.user.id,
-        question: body.data.question,
-        answer: body.data.answer,
-        category: body.data.category || null,
-      })
-      .returning();
+    const id = nanoid();
+    const now = new Date();
+    const newData = {
+      userId: req.user.id,
+      question: body.data.question,
+      answer: body.data.answer,
+      category: body.data.category || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.collection(MEMORY_COLLECTION).doc(id).set(newData);
 
     res.status(201).json({
-      id: String(created.id),
-      question: created.question,
-      answer: created.answer,
-      category: created.category || null,
-      createdAt: created.createdAt.toISOString(),
+      id,
+      question: newData.question,
+      answer: newData.answer,
+      category: newData.category || null,
+      createdAt: now.toISOString(),
     });
   } catch (err) {
     req.log.error({ err }, "Error creating custom memory");
@@ -118,32 +131,30 @@ router.put("/memory/custom/:id", async (req, res) => {
   }
 
   try {
-    const [updated] = await db
-      .update(customMemoryTable)
-      .set({
-        question: body.data.question,
-        answer: body.data.answer,
-        category: body.data.category || null,
-      })
-      .where(
-        and(
-          eq(customMemoryTable.id, parseInt(params.data.id)),
-          eq(customMemoryTable.userId, req.user.id)
-        )
-      )
-      .returning();
-
-    if (!updated) {
+    const docRef = db.collection(MEMORY_COLLECTION).doc(params.data.id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists || doc.data()?.userId !== req.user.id) {
       res.status(404).json({ error: "Memory entry not found" });
       return;
     }
 
+    const updateData = {
+      question: body.data.question,
+      answer: body.data.answer,
+      category: body.data.category || null,
+      updatedAt: new Date(),
+    };
+
+    await docRef.update(updateData);
+    const updated = (await docRef.get()).data();
+
     const result = UpdateCustomMemoryResponse.parse({
-      id: String(updated.id),
-      question: updated.question,
-      answer: updated.answer,
-      category: updated.category || null,
-      createdAt: updated.createdAt.toISOString(),
+      id: params.data.id,
+      question: updated!.question,
+      answer: updated!.answer,
+      category: updated!.category || null,
+      createdAt: updated!.createdAt?.toDate?.()?.toISOString() || updated!.createdAt || new Date().toISOString(),
     });
     res.json(result);
   } catch (err) {
@@ -165,14 +176,15 @@ router.delete("/memory/custom/:id", async (req, res) => {
   }
 
   try {
-    await db
-      .delete(customMemoryTable)
-      .where(
-        and(
-          eq(customMemoryTable.id, parseInt(params.data.id)),
-          eq(customMemoryTable.userId, req.user.id)
-        )
-      );
+    const docRef = db.collection(MEMORY_COLLECTION).doc(params.data.id);
+    const doc = await docRef.get();
+
+    if (!doc.exists || doc.data()?.userId !== req.user.id) {
+      res.status(404).json({ error: "Memory entry not found" });
+      return;
+    }
+
+    await docRef.delete();
 
     const result = DeleteCustomMemoryResponse.parse({ success: true });
     res.json(result);

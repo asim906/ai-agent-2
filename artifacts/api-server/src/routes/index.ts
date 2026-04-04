@@ -7,6 +7,7 @@ import aiSettingsRouter from "./ai-settings";
 import memoryRouter from "./memory";
 import toolsRouter from "./tools";
 import analyticsRouter from "./analytics";
+import leadsRouter from "./leads";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(aiSettingsRouter);
 router.use(memoryRouter);
 router.use(toolsRouter);
 router.use(analyticsRouter);
+router.use(leadsRouter);
 
 export default router;

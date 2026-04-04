@@ -1,20 +1,20 @@
 {
-  "name": "@workspace/db",
+  "name": "@workspace/auth-firebase-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "firebase-admin": "^13.0.0",
-    "zod": "catalog:"
+    "firebase": "^11.0.0",
+    "react": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@types/react": "catalog:"
   }
 }

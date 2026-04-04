@@ -1,15 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { csvFilesTable } from "@workspace/db/schema";
 import {
   ListCsvFilesResponse,
   UploadCsvFileBody,
   DeleteCsvFileParams,
   DeleteCsvFileResponse,
 } from "@workspace/api-zod";
-import { eq, and } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 const router = Router();
+const COLLECTION = "csv_files";
 
 router.get("/tools/csv", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -18,17 +18,19 @@ router.get("/tools/csv", async (req, res) => {
   }
 
   try {
-    const files = await db.query.csvFilesTable.findMany({
-      where: eq(csvFilesTable.userId, req.user.id),
-      orderBy: (t, { desc }) => [desc(t.uploadedAt)],
-    });
+    const snapshot = await db.collection(COLLECTION)
+      .where("userId", "==", req.user.id)
+      .orderBy("uploadedAt", "desc")
+      .get();
+
+    const files = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
     const result = ListCsvFilesResponse.parse(
-      files.map((f) => ({
-        id: String(f.id),
+      files.map((f: any) => ({
+        id: f.id,
         filename: f.filename,
-        rowCount: f.rowCount,
-        uploadedAt: f.uploadedAt.toISOString(),
+        rowCount: f.rowCount || 0,
+        uploadedAt: f.uploadedAt?.toDate?.()?.toISOString() || f.uploadedAt || new Date().toISOString(),
         description: f.description || null,
       }))
     );
@@ -60,23 +62,25 @@ router.post("/tools/csv", async (req, res) => {
       rowCount = 0;
     }
 
-    const [created] = await db
-      .insert(csvFilesTable)
-      .values({
-        userId: req.user.id,
-        filename: body.data.filename,
-        data: body.data.data,
-        rowCount: Math.max(0, rowCount),
-        description: body.data.description || null,
-      })
-      .returning();
+    const id = nanoid();
+    const now = new Date();
+    const newData = {
+      userId: req.user.id,
+      filename: body.data.filename,
+      data: body.data.data,
+      rowCount: Math.max(0, rowCount),
+      description: body.data.description || null,
+      uploadedAt: now,
+    };
+
+    await db.collection(COLLECTION).doc(id).set(newData);
 
     res.status(201).json({
-      id: String(created.id),
-      filename: created.filename,
-      rowCount: created.rowCount,
-      uploadedAt: created.uploadedAt.toISOString(),
-      description: created.description || null,
+      id,
+      filename: newData.filename,
+      rowCount: newData.rowCount,
+      uploadedAt: now.toISOString(),
+      description: newData.description || null,
     });
   } catch (err) {
     req.log.error({ err }, "Error uploading CSV file");
@@ -97,14 +101,15 @@ router.delete("/tools/csv/:id", async (req, res) => {
   }
 
   try {
-    await db
-      .delete(csvFilesTable)
-      .where(
-        and(
-          eq(csvFilesTable.id, parseInt(params.data.id)),
-          eq(csvFilesTable.userId, req.user.id)
-        )
-      );
+    const docRef = db.collection(COLLECTION).doc(params.data.id);
+    const doc = await docRef.get();
+
+    if (!doc.exists || doc.data()?.userId !== req.user.id) {
+      res.status(404).json({ error: "CSV file not found" });
+      return;
+    }
+
+    await docRef.delete();
 
     const result = DeleteCsvFileResponse.parse({ success: true });
     res.json(result);

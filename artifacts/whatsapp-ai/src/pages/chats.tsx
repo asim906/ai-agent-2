@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   useListChats, 
   useGetChat, 
   useListMessages, 
   useSendMessage,
   getListMessagesQueryKey,
-  getListChatsQueryKey
+  getListChatsQueryKey,
+  getGetChatQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
@@ -13,20 +14,28 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Send, Bot, User, Search, Hash, MessageSquare } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 export default function Chats() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
+  const [isAutomationEnabled, setIsAutomationEnabled] = useState<boolean>(true);
   const queryClient = useQueryClient();
 
   const { data: chats } = useListChats({
-    query: { refetchInterval: 5000 }
+    query: { 
+      queryKey: getListChatsQueryKey(),
+      refetchInterval: 5000 
+    }
   });
 
-  const { data: messages } = useListMessages(selectedChatId || "", {
+  const { data: messages } = useListMessages(selectedChatId || "", undefined, {
     query: {
+      queryKey: getListMessagesQueryKey(selectedChatId || ""),
       enabled: !!selectedChatId,
       refetchInterval: 3000
     }
@@ -34,9 +43,17 @@ export default function Chats() {
 
   const { data: chatDetails } = useGetChat(selectedChatId || "", {
     query: {
+      queryKey: getGetChatQueryKey(selectedChatId || ""),
       enabled: !!selectedChatId
     }
   });
+
+  // Sync local toggle state with database
+  useEffect(() => {
+    if (chatDetails) {
+      setIsAutomationEnabled(chatDetails.automationEnabled !== false);
+    }
+  }, [chatDetails]);
 
   const sendMessage = useSendMessage();
 
@@ -82,7 +99,7 @@ export default function Chats() {
         </div>
         <ScrollArea className="flex-1">
           <div className="divide-y divide-border">
-            {chats?.map(chat => (
+            {Array.isArray(chats) ? chats.filter(c => !c.id.includes("status@broadcast")).map(chat => (
               <button
                 key={chat.id}
                 onClick={() => setSelectedChatId(chat.id)}
@@ -113,7 +130,7 @@ export default function Chats() {
                   </div>
                 )}
               </button>
-            ))}
+            )) : null}
             {chats?.length === 0 && (
               <div className="p-8 text-center text-muted-foreground text-sm">
                 No active conversations
@@ -134,15 +151,48 @@ export default function Chats() {
                   {chatDetails?.isGroup ? <Hash className="w-4 h-4" /> : <User className="w-4 h-4" />}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <h3 className="font-bold text-sm">{chatDetails?.name || chatDetails?.phoneNumber}</h3>
-                <p className="text-xs text-muted-foreground">{chatDetails?.phoneNumber}</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm truncate">{chatDetails?.name || chatDetails?.phoneNumber}</h3>
+                <p className="text-[10px] text-muted-foreground">{chatDetails?.phoneNumber}</p>
+              </div>
+
+              {/* AI vs Human Toggle */}
+              <div className="flex items-center gap-3 bg-muted/50 px-3 py-1.5 rounded-full border border-border animate-in slide-in-from-right-2">
+                <div className="flex flex-col items-end">
+                  <span className={cn("text-[10px] font-bold leading-none", chatDetails?.automationEnabled ? "text-primary" : "text-muted-foreground")}>
+                    {chatDetails?.automationEnabled ? "AI MODE" : "MANUAL MODE"}
+                  </span>
+                  <span className="text-[8px] text-muted-foreground leading-none mt-0.5">
+                    {chatDetails?.automationEnabled ? "Bot is replying" : "Human override"}
+                  </span>
+                </div>
+                <Switch
+                  checked={isAutomationEnabled}
+                  onCheckedChange={async (enabled) => {
+                    setIsAutomationEnabled(enabled); // Optimistic Update
+                    try {
+                      const response = await fetch(`/api/chats/${selectedChatId}/automation`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled })
+                      });
+                      
+                      if (!response.ok) throw new Error("Failed to update");
+                      
+                      await queryClient.invalidateQueries({ queryKey: getGetChatQueryKey(selectedChatId!) });
+                      toast.success(enabled ? "AI Mode enabled" : "Human Response mode enabled");
+                    } catch (err) {
+                      setIsAutomationEnabled(!enabled); // Rollback on error
+                      toast.error("Failed to toggle automation mode");
+                    }
+                  }}
+                />
               </div>
             </div>
             
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-6 max-w-3xl mx-auto pb-4">
-                {messages?.map(msg => {
+                {Array.isArray(messages) && messages.map(msg => {
                   const isMe = msg.fromMe;
                   return (
                     <div key={msg.id} className={cn("flex flex-col max-w-[80%]", isMe ? "ml-auto items-end" : "items-start")}>

@@ -9,17 +9,18 @@ import { authMiddleware } from "./middlewares/authMiddleware";
 const app: Express = express();
 
 app.use(
+  // @ts-ignore - pinoHttp exports a CJS module which conflicts with Vercel's strict ESM typechecking
   pinoHttp({
     logger,
     serializers: {
-      req(req) {
+      req(req: any) {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      res(res: any) {
         return {
           statusCode: res.statusCode,
         };

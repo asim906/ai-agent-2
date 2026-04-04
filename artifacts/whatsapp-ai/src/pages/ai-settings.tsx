@@ -8,7 +8,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,7 +27,6 @@ export default function AiSettings() {
     apiKey: "",
     temperature: 0.7,
     maxTokens: 500,
-    autoReply: false,
     systemPrompt: ""
   });
 
@@ -40,7 +38,6 @@ export default function AiSettings() {
         apiKey: settings.apiKey || "",
         temperature: settings.temperature,
         maxTokens: settings.maxTokens || 500,
-        autoReply: settings.autoReply,
         systemPrompt: settings.systemPrompt || ""
       });
     }
@@ -161,15 +158,14 @@ export default function AiSettings() {
               <p className="text-xs text-muted-foreground">This defines the fundamental persona and rules for the agent.</p>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-background border border-border rounded-lg">
+            <div className="flex items-start gap-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+              <BrainCircuit className="w-5 h-5 text-primary mt-0.5 shrink-0" />
               <div>
-                <Label className="text-base">Autonomous Mode</Label>
-                <p className="text-sm text-muted-foreground">Allow AI to automatically reply to incoming messages</p>
+                <p className="text-sm font-semibold text-primary">How AI Automation Works</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  AI replies are controlled by two toggles: the <strong>Autopilot</strong> switch on the Dashboard (global on/off), and the <strong>AI MODE</strong> toggle inside each chat (per-conversation control). Configure your API key and system prompt here, then enable Autopilot from the Dashboard.
+                </p>
               </div>
-              <Switch 
-                checked={formData.autoReply}
-                onCheckedChange={(checked) => setFormData({...formData, autoReply: checked})}
-              />
             </div>
           </CardContent>
         </Card>

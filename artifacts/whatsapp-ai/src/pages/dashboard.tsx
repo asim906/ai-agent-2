@@ -8,17 +8,19 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, ShieldAlert, Zap, SmartphoneNfc, CheckCircle2 } from "lucide-react";
+import { Activity, ShieldAlert, Zap, SmartphoneNfc, CheckCircle2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   
-  const { data: status, isLoading: isStatusLoading } = useGetWhatsappStatus();
+  const { data: status, isLoading: isStatusLoading, error: statusError } = useGetWhatsappStatus();
   const { data: automationStatus } = useGetAutomationStatus({
     query: {
+      queryKey: getGetAutomationStatusQueryKey(),
       enabled: status?.connected
     }
   });
@@ -41,7 +43,29 @@ export default function Dashboard() {
     });
   };
 
-  if (isStatusLoading || !status?.connected) return null;
+  if (isStatusLoading) return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+
+  if (statusError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-8 text-center">
+        <ShieldAlert className="w-12 h-12 text-destructive mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Connection Error</h2>
+        <p className="text-muted-foreground mb-6 max-w-md">
+          Unable to synchronize with the backend server. Please ensure the API is running.
+        </p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          <Zap className="w-4 h-4 mr-2" />
+          Retry Connection
+        </Button>
+      </div>
+    );
+  }
+
+  if (!status?.connected) return null;
 
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">

@@ -3,23 +3,14 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
-    "noEmit": true,
-    "jsx": "preserve",
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "jsx": "react-jsx",
     "lib": ["esnext", "dom", "dom.iterable"],
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
-    "types": ["node", "vite/client"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "references": [
-    {
-      "path": "../../lib/api-client-react"
-    },
-    {
-      "path": "../../lib/auth-firebase-web"
-    }
-  ]
+    "types": ["node"]
+  }
 }

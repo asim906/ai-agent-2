@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { messagesTable, chatsTable } from "@workspace/db/schema";
 import {
   GetAnalyticsSummaryResponse,
   GetDailyAnalyticsResponse,
 } from "@workspace/api-zod";
-import { eq, and, count, sql } from "drizzle-orm";
 
 const router = Router();
+const MESSAGES_COLLECTION = "messages";
+const CHATS_COLLECTION = "chats";
 
 router.get("/analytics/summary", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -16,37 +16,39 @@ router.get("/analytics/summary", async (req, res) => {
   }
 
   try {
-    const [{ totalMessages }] = await db
-      .select({ totalMessages: count() })
-      .from(messagesTable)
-      .where(eq(messagesTable.userId, req.user.id));
+    const totalMessagesSnapshot = await db.collection(MESSAGES_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .count()
+      .get();
+    const totalMessages = totalMessagesSnapshot.data().count;
 
-    const [{ totalSent }] = await db
-      .select({ totalSent: count() })
-      .from(messagesTable)
-      .where(and(eq(messagesTable.userId, req.user.id), eq(messagesTable.fromMe, true)));
+    const totalSentSnapshot = await db.collection(MESSAGES_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .where("fromMe", "==", true)
+      .count()
+      .get();
+    const totalSent = totalSentSnapshot.data().count;
 
-    const [{ aiResponses }] = await db
-      .select({ aiResponses: count() })
-      .from(messagesTable)
-      .where(and(eq(messagesTable.userId, req.user.id), eq(messagesTable.isAiGenerated, true)));
+    const aiResponsesSnapshot = await db.collection(MESSAGES_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .where("isAiGenerated", "==", true)
+      .count()
+      .get();
+    const aiResponses = aiResponsesSnapshot.data().count;
 
-    const [{ totalChats }] = await db
-      .select({ totalChats: count() })
-      .from(chatsTable)
-      .where(eq(chatsTable.userId, req.user.id));
-
-    const totalMessages_ = totalMessages ?? 0;
-    const totalSent_ = totalSent ?? 0;
-    const aiResponses_ = aiResponses ?? 0;
+    const totalChatsSnapshot = await db.collection(CHATS_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .count()
+      .get();
+    const totalChats = totalChatsSnapshot.data().count;
 
     const result = GetAnalyticsSummaryResponse.parse({
-      totalMessages: totalMessages_,
-      totalSent: totalSent_,
-      totalReceived: totalMessages_ - totalSent_,
-      totalChats: totalChats ?? 0,
-      aiResponses: aiResponses_,
-      successRate: totalMessages_ > 0 ? Math.round((aiResponses_ / totalMessages_) * 100) : 0,
+      totalMessages,
+      totalSent,
+      totalReceived: totalMessages - totalSent,
+      totalChats,
+      aiResponses,
+      successRate: totalMessages > 0 ? Math.round((aiResponses / totalMessages) * 100) : 0,
     });
     res.json(result);
   } catch (err) {
@@ -65,34 +67,42 @@ router.get("/analytics/daily", async (req, res) => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const dailyData = await db
-      .select({
-        date: sql<string>`DATE(${messagesTable.timestamp})`.as("date"),
-        sent: sql<number>`COUNT(*) FILTER (WHERE ${messagesTable.fromMe} = true)`.as("sent"),
-        received: sql<number>`COUNT(*) FILTER (WHERE ${messagesTable.fromMe} = false)`.as("received"),
-        aiResponses: sql<number>`COUNT(*) FILTER (WHERE ${messagesTable.isAiGenerated} = true)`.as("ai_responses"),
-      })
-      .from(messagesTable)
-      .where(
-        and(
-          eq(messagesTable.userId, req.user.id),
-          sql`${messagesTable.timestamp} >= ${thirtyDaysAgo}`
-        )
-      )
-      .groupBy(sql`DATE(${messagesTable.timestamp})`)
-      .orderBy(sql`DATE(${messagesTable.timestamp})`);
+    const snapshot = await db.collection(MESSAGES_COLLECTION)
+      .where("userId", "==", req.user.id)
+      .where("timestamp", ">=", thirtyDaysAgo)
+      .get();
+
+    const messages = snapshot.docs
+      .map(doc => doc.data() as any)
+      .sort((a, b) => {
+        const timeA = a.timestamp?.toDate?.()?.getTime() || new Date(a.timestamp || 0).getTime();
+        const timeB = b.timestamp?.toDate?.()?.getTime() || new Date(b.timestamp || 0).getTime();
+        return timeA - timeB;
+      });
+    const dailyMap = new Map<string, { sent: number; received: number; aiResponses: number }>();
+
+    messages.forEach(m => {
+      const date = m.timestamp?.toDate?.()?.toISOString().split("T")[0] || 
+                   (typeof m.timestamp === "string" ? m.timestamp.split("T")[0] : new Date().toISOString().split("T")[0]);
+      
+      const stats = dailyMap.get(date) || { sent: 0, received: 0, aiResponses: 0 };
+      if (m.fromMe) stats.sent++;
+      else stats.received++;
+      if (m.isAiGenerated) stats.aiResponses++;
+      dailyMap.set(date, stats);
+    });
 
     const days: Array<{ date: string; sent: number; received: number; aiResponses: number }> = [];
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
-      const found = dailyData.find((r) => r.date === dateStr);
+      const stats = dailyMap.get(dateStr) || { sent: 0, received: 0, aiResponses: 0 };
       days.push({
         date: dateStr,
-        sent: Number(found?.sent ?? 0),
-        received: Number(found?.received ?? 0),
-        aiResponses: Number(found?.aiResponses ?? 0),
+        sent: stats.sent,
+        received: stats.received,
+        aiResponses: stats.aiResponses,
       });
     }
 

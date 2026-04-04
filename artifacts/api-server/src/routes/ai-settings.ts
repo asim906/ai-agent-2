@@ -1,14 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { aiSettingsTable } from "@workspace/db/schema";
 import {
   GetAiSettingsResponse,
   UpdateAiSettingsBody,
   UpdateAiSettingsResponse,
 } from "@workspace/api-zod";
-import { eq } from "drizzle-orm";
 
 const router = Router();
+const COLLECTION = "ai_settings";
 
 router.get("/ai-settings", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -17,31 +16,34 @@ router.get("/ai-settings", async (req, res) => {
   }
 
   try {
-    let settings = await db.query.aiSettingsTable.findFirst({
-      where: eq(aiSettingsTable.userId, req.user.id),
-    });
+    const docRef = db.collection(COLLECTION).doc(req.user.id);
+    const doc = await docRef.get();
+    let settings = doc.data();
 
-    if (!settings) {
-      const [created] = await db.insert(aiSettingsTable).values({
-        id: req.user.id,
+    if (!doc.exists) {
+      const defaultSettings = {
         userId: req.user.id,
         provider: "openai",
         model: "gpt-4o-mini",
         temperature: 7,
         maxTokens: 500,
         autoReply: false,
-      }).returning();
-      settings = created;
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await docRef.set(defaultSettings);
+      settings = defaultSettings;
     }
 
     const result = GetAiSettingsResponse.parse({
-      provider: settings.provider as "openai" | "openrouter" | "gemini",
-      model: settings.model,
-      apiKey: settings.apiKey ? "***" + settings.apiKey.slice(-4) : null,
-      temperature: settings.temperature / 10,
-      maxTokens: settings.maxTokens,
-      autoReply: settings.autoReply,
-      systemPrompt: settings.systemPrompt || null,
+      provider: settings!.provider as "openai" | "openrouter" | "gemini",
+      model: settings!.model,
+      apiKey: settings!.apiKey ? "***" + settings!.apiKey.slice(-4) : null,
+      temperature: settings!.temperature / 10,
+      maxTokens: settings!.maxTokens,
+      autoReply: settings!.autoReply,
+      systemPrompt: settings!.systemPrompt || null,
+      googleSheetUrl: settings!.googleSheetUrl || null,
     });
     res.json(result);
   } catch (err) {
@@ -63,11 +65,13 @@ router.put("/ai-settings", async (req, res) => {
   }
 
   try {
-    const existing = await db.query.aiSettingsTable.findFirst({
-      where: eq(aiSettingsTable.userId, req.user.id),
-    });
+    const docRef = db.collection(COLLECTION).doc(req.user.id);
+    const doc = await docRef.get();
 
-    const updateData: Partial<typeof aiSettingsTable.$inferInsert> = {};
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
     if (body.data.provider !== undefined) updateData.provider = body.data.provider;
     if (body.data.model !== undefined) updateData.model = body.data.model;
     if (body.data.apiKey !== undefined && body.data.apiKey !== null && !body.data.apiKey.startsWith("***")) {
@@ -77,27 +81,26 @@ router.put("/ai-settings", async (req, res) => {
     if (body.data.maxTokens !== undefined) updateData.maxTokens = body.data.maxTokens;
     if (body.data.autoReply !== undefined) updateData.autoReply = body.data.autoReply;
     if (body.data.systemPrompt !== undefined) updateData.systemPrompt = body.data.systemPrompt;
+    if (body.data.googleSheetUrl !== undefined) updateData.googleSheetUrl = body.data.googleSheetUrl;
 
     let settings;
-    if (existing) {
-      const [updated] = await db
-        .update(aiSettingsTable)
-        .set(updateData)
-        .where(eq(aiSettingsTable.userId, req.user.id))
-        .returning();
-      settings = updated;
+    if (doc.exists) {
+      await docRef.update(updateData);
+      const updatedDoc = await docRef.get();
+      settings = updatedDoc.data();
     } else {
-      const [created] = await db.insert(aiSettingsTable).values({
-        id: req.user.id,
+      const newData = {
         userId: req.user.id,
         provider: body.data.provider || "openai",
         model: body.data.model || "gpt-4o-mini",
         temperature: Math.round((body.data.temperature || 0.7) * 10),
         maxTokens: body.data.maxTokens || 500,
         autoReply: body.data.autoReply || false,
+        createdAt: new Date(),
         ...updateData,
-      }).returning();
-      settings = created;
+      };
+      await docRef.set(newData);
+      settings = newData;
     }
 
     const result = UpdateAiSettingsResponse.parse({
@@ -108,6 +111,7 @@ router.put("/ai-settings", async (req, res) => {
       maxTokens: settings.maxTokens,
       autoReply: settings.autoReply,
       systemPrompt: settings.systemPrompt || null,
+      googleSheetUrl: settings.googleSheetUrl || null,
     });
     res.json(result);
   } catch (err) {

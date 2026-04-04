@@ -1,7 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { whatsappService } from "./lib/whatsapp";
 
-const rawPort = process.env["PORT"];
+const rawPort = process.env["PORT"] || "5001";
 
 if (!rawPort) {
   throw new Error(
@@ -22,4 +23,10 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Automatically restore all previously-connected WhatsApp sessions
+  // so the AI can receive messages immediately without a page reload.
+  whatsappService.reconnectAllSessions().catch((err) =>
+    logger.error({ err }, "Failed to auto-reconnect WhatsApp sessions")
+  );
 });

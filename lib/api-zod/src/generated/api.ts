@@ -131,6 +131,7 @@ export const ListChatsResponseItem = zod.object({
   lastMessageAt: zod.string().nullable(),
   unreadCount: zod.number(),
   isGroup: zod.boolean(),
+  automationEnabled: zod.boolean(),
 });
 export const ListChatsResponse = zod.array(ListChatsResponseItem);
 
@@ -150,6 +151,7 @@ export const GetChatResponse = zod.object({
   lastMessageAt: zod.string().nullable(),
   unreadCount: zod.number(),
   isGroup: zod.boolean(),
+  automationEnabled: zod.boolean(),
 });
 
 /**
@@ -212,6 +214,7 @@ export const GetAiSettingsResponse = zod.object({
   maxTokens: zod.number().optional(),
   autoReply: zod.boolean(),
   systemPrompt: zod.string().nullish(),
+  googleSheetUrl: zod.string().nullish(),
 });
 
 /**
@@ -225,6 +228,7 @@ export const UpdateAiSettingsBody = zod.object({
   maxTokens: zod.number().optional(),
   autoReply: zod.boolean().optional(),
   systemPrompt: zod.string().nullish(),
+  googleSheetUrl: zod.string().nullish(),
 });
 
 export const UpdateAiSettingsResponse = zod.object({
@@ -235,6 +239,7 @@ export const UpdateAiSettingsResponse = zod.object({
   maxTokens: zod.number().optional(),
   autoReply: zod.boolean(),
   systemPrompt: zod.string().nullish(),
+  googleSheetUrl: zod.string().nullish(),
 });
 
 /**
@@ -375,4 +380,15 @@ export const ToggleAutomationResponse = zod.object({
 export const GetAutomationStatusResponse = zod.object({
   enabled: zod.boolean(),
   processedToday: zod.number(),
+});
+/**
+ * @summary Toggle automation for a single chat
+ */
+export const UpdateChatAutomationBody = zod.object({
+  enabled: zod.boolean(),
+});
+
+export const UpdateChatAutomationResponse = zod.object({
+  success: zod.boolean(),
+  enabled: zod.boolean(),
 });

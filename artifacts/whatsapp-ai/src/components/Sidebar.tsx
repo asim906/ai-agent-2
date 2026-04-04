@@ -6,9 +6,10 @@ import {
   BrainCircuit, 
   Wrench, 
   BarChart3, 
-  LogOut 
+  LogOut,
+  Users
 } from "lucide-react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth, type AuthUser } from "@workspace/auth-firebase-web";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -16,13 +17,14 @@ const navItems = [
   { href: "/chats", label: "Chats", icon: MessageSquare },
   { href: "/ai-settings", label: "AI Settings", icon: Settings },
   { href: "/memory", label: "Memory", icon: BrainCircuit },
+  { href: "/leads", label: "Leads", icon: Users },
   { href: "/tools", label: "Tools", icon: Wrench },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function Sidebar() {
   const [location] = useLocation();
-  const { logout, user } = useAuth();
+  const { logout, user }: { logout: () => void, user: AuthUser | null } = useAuth();
 
   return (
     <div className="w-64 border-r border-border bg-card flex flex-col justify-between">
@@ -53,7 +55,7 @@ export function Sidebar() {
             <img src={user.profileImageUrl} alt="Profile" className="w-8 h-8 rounded-full mr-3" />
           ) : (
             <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mr-3">
-              {user?.firstName?.[0] || 'U'}
+              {user?.firstName ? user.firstName[0] : 'U'}
             </div>
           )}
           <div className="overflow-hidden">

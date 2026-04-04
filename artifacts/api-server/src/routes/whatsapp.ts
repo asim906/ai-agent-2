@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { whatsappSessionsTable } from "@workspace/db/schema";
 import {
   GetWhatsappStatusResponse,
   GetWhatsappQrResponse,
@@ -9,10 +8,19 @@ import {
   ToggleAutomationResponse,
   GetAutomationStatusResponse,
 } from "@workspace/api-zod";
-import { eq } from "drizzle-orm";
 import { whatsappService } from "../lib/whatsapp";
 
 const router = Router();
+const COLLECTION = "whatsapp_sessions";
+
+router.get("/whatsapp/test-qr", async (req, res) => {
+  try {
+    const qrData = await whatsappService.getQrCode("test-user-id");
+    res.json(qrData);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 router.get("/whatsapp/status", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -21,9 +29,8 @@ router.get("/whatsapp/status", async (req, res) => {
   }
 
   try {
-    const session = await db.query.whatsappSessionsTable.findFirst({
-      where: eq(whatsappSessionsTable.userId, req.user.id),
-    });
+    const doc = await db.collection(COLLECTION).doc(req.user.id).get();
+    const session = doc.data();
 
     const status = whatsappService.getStatus(req.user.id);
 
@@ -31,7 +38,7 @@ router.get("/whatsapp/status", async (req, res) => {
       connected: status.connected || (session?.connected ?? false),
       phoneNumber: status.phoneNumber || session?.phoneNumber || null,
       automationEnabled: session?.automationEnabled ?? false,
-      lastConnected: session?.lastConnected?.toISOString() || null,
+      lastConnected: session?.lastConnected?.toDate?.()?.toISOString() || session?.lastConnected || null,
     });
     res.json(result);
   } catch (err) {
@@ -45,6 +52,11 @@ router.get("/whatsapp/qr", async (req, res) => {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+
+  // Disable caching for QR codes - they're time-sensitive and expire in 60s
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
 
   try {
     const qrData = await whatsappService.getQrCode(req.user.id);
@@ -60,6 +72,21 @@ router.get("/whatsapp/qr", async (req, res) => {
   }
 });
 
+router.get("/whatsapp/debug", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const session = whatsappService.getSessionDebug(req.user.id);
+    res.json(session);
+  } catch (err) {
+    req.log.error({ err }, "Error getting WhatsApp debug info");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/whatsapp/disconnect", async (req, res) => {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "Unauthorized" });
@@ -68,15 +95,31 @@ router.post("/whatsapp/disconnect", async (req, res) => {
 
   try {
     await whatsappService.disconnect(req.user.id);
-    await db
-      .update(whatsappSessionsTable)
-      .set({ connected: false, phoneNumber: null })
-      .where(eq(whatsappSessionsTable.userId, req.user.id));
+    await db.collection(COLLECTION).doc(req.user.id).set({
+      connected: false,
+      phoneNumber: null,
+      updatedAt: new Date(),
+    }, { merge: true });
 
     const result = DisconnectWhatsappResponse.parse({ success: true });
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Error disconnecting WhatsApp");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/whatsapp/debug", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const session = whatsappService.getSessionDebug(req.user.id);
+    res.json(session);
+  } catch (err) {
+    req.log.error({ err }, "Error getting WhatsApp debug info");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -94,22 +137,11 @@ router.post("/automation/toggle", async (req, res) => {
   }
 
   try {
-    const existing = await db.query.whatsappSessionsTable.findFirst({
-      where: eq(whatsappSessionsTable.userId, req.user.id),
-    });
-
-    if (existing) {
-      await db
-        .update(whatsappSessionsTable)
-        .set({ automationEnabled: body.data.enabled })
-        .where(eq(whatsappSessionsTable.userId, req.user.id));
-    } else {
-      await db.insert(whatsappSessionsTable).values({
-        id: req.user.id,
-        userId: req.user.id,
-        automationEnabled: body.data.enabled,
-      });
-    }
+    await db.collection(COLLECTION).doc(req.user.id).set({
+      userId: req.user.id,
+      automationEnabled: body.data.enabled,
+      updatedAt: new Date(),
+    }, { merge: true });
 
     const result = ToggleAutomationResponse.parse({
       enabled: body.data.enabled,
@@ -129,12 +161,8 @@ router.get("/automation/status", async (req, res) => {
   }
 
   try {
-    const session = await db.query.whatsappSessionsTable.findFirst({
-      where: eq(whatsappSessionsTable.userId, req.user.id),
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const doc = await db.collection(COLLECTION).doc(req.user.id).get();
+    const session = doc.data();
 
     const result = GetAutomationStatusResponse.parse({
       enabled: session?.automationEnabled ?? false,

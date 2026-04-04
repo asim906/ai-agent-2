@@ -2,17 +2,18 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
-import { useGetWhatsappStatus, useGetWhatsappQr } from "@workspace/api-client-react";
-import { Loader2, CheckCircle2, Smartphone } from "lucide-react";
+import { useGetWhatsappStatus, useGetWhatsappQr, getGetWhatsappQrQueryKey } from "@workspace/api-client-react";
+import { Loader2, CheckCircle2, Smartphone, AlertCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { data: status, isLoading: isStatusLoading } = useGetWhatsappStatus();
   
-  const { data: qrData, isLoading: isQrLoading } = useGetWhatsappQr({
+  const { data: qrData, isLoading: isQrLoading, error: qrError, refetch: refetchQr } = useGetWhatsappQr({
     query: {
-      enabled: status ? !status.connected : false,
+      queryKey: getGetWhatsappQrQueryKey(),
+      enabled: status ? !status.connected : true,
       refetchInterval: (query) => {
         // Poll every 5 seconds if not connected
         return status?.connected ? false : 5000;
@@ -53,6 +54,16 @@ export default function Onboarding() {
                   <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-4" />
                   <p className="text-sm text-muted-foreground">Generating secure code...</p>
                 </div>
+              ) : qrError ? (
+                <div className="w-64 h-64 flex flex-col items-center justify-center bg-destructive/10 border border-destructive/20 text-destructive rounded-lg">
+                  <AlertCircle className="w-8 h-8 mb-4" />
+                  <p className="text-sm mb-2">Failed to generate QR code</p>
+                  <p className="text-xs text-destructive/80 mb-4">{qrError?.message || 'Unknown error'}</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchQr()}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
               ) : qrData?.qr ? (
                 <div className="p-4 bg-white rounded-xl shadow-sm">
                   {qrData.qr.startsWith('data:image') ? (
@@ -62,8 +73,16 @@ export default function Onboarding() {
                   )}
                 </div>
               ) : (
-                <div className="w-64 h-64 flex flex-col items-center justify-center bg-destructive/10 border border-destructive/20 text-destructive rounded-lg">
-                  <p className="text-sm">Failed to load QR code</p>
+                <div className="w-64 h-64 flex flex-col items-center justify-center bg-destructive/5 border border-destructive/10 text-destructive/90 rounded-lg text-center px-4">
+                  <AlertCircle className="w-10 h-10 mb-4 opacity-50" />
+                  <p className="font-semibold mb-1">QR Generation Pending</p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    The backend is preparing a secure session. This may take up to 30 seconds.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={() => refetchQr()} className="h-8">
+                    <RefreshCw className="w-3 h-3 mr-2" />
+                    Check Again
+                  </Button>
                 </div>
               )}
               <div className="mt-8 text-center space-y-2">
