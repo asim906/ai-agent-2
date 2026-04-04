@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { OpenAI } from "openai";
 import { db } from "@workspace/db";
 import { logger } from "./logger";
 
@@ -80,7 +80,7 @@ export async function generateAiResponse(
       } : undefined,
     });
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
       {
         role: "system",
         content: systemPrompt
@@ -164,7 +164,7 @@ export async function generateAiResponse(
       return JSON.stringify({ error: "Tool not found" });
     };
 
-    const tools: OpenAI.Chat.ChatCompletionTool[] = [
+    const tools: OpenAI.ChatCompletionTool[] = [
       {
         type: "function",
         function: {
