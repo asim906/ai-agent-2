@@ -363,7 +363,7 @@ class WhatsappService {
         console.log(`Baileys: messages.upsert - Synced ${messages.length} real-time messages for user ${userId}`);
       });
 
-      sock.ev.on("connection.update", (update) => {
+      sock.ev.on("connection.update", async (update) => {
         console.log(`Baileys: connection.update - ${JSON.stringify(update)}`);
         const { connection, lastDisconnect, qr } = update;
 
@@ -375,16 +375,42 @@ class WhatsappService {
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
           };
           logger.info({ userId, qrLength: qr.length }, "WhatsApp QR code generated and stored");
+          
+          // Persist QR to Firestore for better reliability
+          try {
+            await db.collection("whatsapp_sessions").doc(userId).set({
+              qr: qr,
+              qrExpiresAt: current.qr.expiresAt,
+              updatedAt: new Date(),
+            }, { merge: true });
+          } catch (e) {}
         }
 
         if (connection === "open") {
           const current = this.getSession(userId);
+          const phoneNumber = (sock.user?.id ?? "").split(":")[0] || null;
           current.status = {
             connected: true,
-            phoneNumber: (sock.user?.id ?? "").split(":")[0] || null,
+            phoneNumber,
           };
           current.qr = { qr: null, expiresAt: null };
+          
           logger.info({ userId }, "WhatsApp connected");
+
+          // PERSIST CONNECTION STATE TO FIRESTORE
+          try {
+            await db.collection("whatsapp_sessions").doc(userId).set({
+              connected: true,
+              phoneNumber,
+              lastConnected: new Date(),
+              updatedAt: new Date(),
+              qr: null, // Clear QR
+              qrExpiresAt: null,
+            }, { merge: true });
+            console.log(`Firestore: Updated connection state for ${userId}`);
+          } catch (err: any) {
+            console.error(`Firestore ERROR updating connection status for ${userId}:`, err.message);
+          }
         }
 
         if (connection === "close") {
@@ -400,9 +426,26 @@ class WhatsappService {
             current.status = { connected: false, phoneNumber: null };
             current.qr = { qr: null, expiresAt: null };
             logger.info({ userId }, "WhatsApp logged out");
+            
+            // Persist Logout
+            try {
+              await db.collection("whatsapp_sessions").doc(userId).set({
+                connected: false,
+                phoneNumber: null,
+                updatedAt: new Date(),
+              }, { merge: true });
+            } catch (e) {}
           } else {
             current.status = { connected: false, phoneNumber: null };
             logger.warn({ userId, code, message }, "WhatsApp connection closed — will reconnect on next QR request");
+            
+            // Persist Disconnection
+            try {
+              await db.collection("whatsapp_sessions").doc(userId).set({
+                connected: false,
+                updatedAt: new Date(),
+              }, { merge: true });
+            } catch (e) {}
           }
         }
       });

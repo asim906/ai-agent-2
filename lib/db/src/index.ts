@@ -61,7 +61,7 @@ if (getApps().length === 0) {
         console.log("Firebase Init: Attempting to use Application Default Credentials");
         console.log("Make sure GOOGLE_APPLICATION_CREDENTIALS is set or Firebase CLI is logged in");
         app = initializeApp({
-          projectId: "c-whatsapp-d77dc"
+          projectId: "whatsapp-ai-e0b6e"
         });
         console.log("Firebase Init: Success with Application Default Credentials");
       } catch (e: any) {
