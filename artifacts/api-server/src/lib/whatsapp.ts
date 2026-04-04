@@ -405,11 +405,12 @@ class WhatsappService {
               lastConnected: new Date(),
               updatedAt: new Date(),
               qr: null, // Clear QR
+              qr: null, // Clear the QR code as it's no longer needed
               qrExpiresAt: null,
             }, { merge: true });
-            console.log(`Firestore: Updated connection state for ${userId}`);
+            console.log(`Firestore: Updated connection status to 'open' for user ${userId}`);
           } catch (err: any) {
-            console.error(`Firestore ERROR updating connection status for ${userId}:`, err.message);
+            console.error(`Firestore ERROR updating status for ${userId}:`, err.message);
           }
         }
 
@@ -427,7 +428,7 @@ class WhatsappService {
             current.qr = { qr: null, expiresAt: null };
             logger.info({ userId }, "WhatsApp logged out");
             
-            // Persist Logout
+            // PERSIST LOGOUT STATE
             try {
               await db.collection("whatsapp_sessions").doc(userId).set({
                 connected: false,
